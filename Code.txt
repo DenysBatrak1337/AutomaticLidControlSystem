@@ -1,0 +1,109 @@
+/*
+   Wake up every second and check the distance.
+   If a hand is detected, activate the servo, open the lid,
+   record the time, and go back to sleep for one second.
+   If no hand is detected and the holding time has elapsed,
+   activate the servo and close the lid.
+*/
+
+//--------------------SETTINGS----------------------
+#define cap_time 2      // lid open time in seconds
+#define open_angle 10   // opening angle
+#define close_angle 155 // closing angle
+
+#define debug 0         // output information to the serial port for debugging (0 = off, 1 = on)
+//--------------------SETTINGS----------------------
+
+// ---CONNECTION---
+#define IRsensor 4
+//#define sensorVCC 4
+#define servoPin 7
+// ---CONNECTION---
+
+#include "LowPower.h" // sleep mode library
+#include <Servo.h>    // library for controlling the servo motor
+#include <Arduino.h>
+#include <rgb_lcd.h>
+
+Servo servo;          // declare a Servo variable
+rgb_lcd lcd;          // declare an rgb_lcd variable
+long duration;
+
+unsigned long open_timer;
+bool open_flag;
+bool IRsensor_flag;
+unsigned int open_count = 0;  // opening counter
+
+//////////////////////
+void open_cap() {
+  servo.write(open_angle);        // open the lid
+  delay(500);                     // wait for the servo
+  lcd.clear();                    // clear the display
+  lcd.setCursor(0, 0);            // move the cursor to the beginning
+  lcd.print("Open");              // display "Open"
+  open_flag = 1;
+  digitalWrite(8, HIGH);          // turn on the sensor
+  open_count++;                   // increase the counter
+  lcd.setCursor(0, 1);            // move to the second line
+  lcd.print("Counter: ");         // display "Counter: "
+  lcd.print(open_count);          // display the number of openings
+}
+
+void close_cap() {
+  servo.write(close_angle);       // close the lid
+  delay(500);                     // wait for the servo
+  lcd.clear();                    // clear the display
+  lcd.setCursor(0, 0);            // move the cursor to the beginning
+  lcd.print("Close");             // display "Close"
+  open_flag = 0;
+  digitalWrite(8, LOW);            // turn off the sensor
+  lcd.setCursor(0, 1);             // move to the second line
+  lcd.print("Counter: ");          // display "Counter: "
+  lcd.print(open_count);            // display the number of openings
+}
+
+////////////////////////////
+void setup() {
+  Serial.begin(9600);
+  Serial.println("system start");
+  lcd.begin(16, 2);
+
+  if (debug) Serial.println("system start");
+  servo.attach(servoPin);          // servo connected to pin 7
+  pinMode(IRsensor, INPUT);        // IR sensor connected to pin 4
+  pinMode(8, OUTPUT);              // power pin configured as output
+                                  
+  close_cap();                     // initial position - closed
+}
+
+void loop() {
+  lcd.display();
+   
+  LowPower.powerDown(SLEEP_1S, ADC_OFF, BOD_OFF);  // sleep for 1 second
+
+  // read the distance sensor
+  IRsensor_flag = !digitalRead(IRsensor);
+  // turn off the distance sensor
+
+  /*if (debug) {
+    Serial.println(IRsensor);
+    delay(500);
+  }  */
+
+  if (IRsensor_flag) {              // if a hand is detected
+    open_timer = 0;                 // reset the timer
+    if (!open_flag) {                // if the lid is closed
+      open_cap();                   // open the lid
+    }
+  }
+  else {
+    if (open_flag) {                 // if the lid is open
+      open_timer++;                  // increase the timer
+      if (open_timer > cap_time) {   // if the specified time has elapsed
+        close_cap();                 // close the lid
+      }
+    }
+  }
+
+  lcd.noDisplay();
+}
